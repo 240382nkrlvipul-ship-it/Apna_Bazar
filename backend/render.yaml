@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: apna-bazaar-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 -b 0.0.0.0:$PORT "backend.app:application"
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///grocery.db
+      - key: FRONTEND_URL
+        value: https://apna-bazaar.onrender.com
+      - key: SHOP_LATITUDE
+        value: "19.4553"
+      - key: SHOP_LONGITUDE
+        value: "72.8120"
+      - key: DELIVERY_RADIUS_KM
+        value: "15.0"
+      - key: PORT
+        value: "5000"
+    autoDeploy: true
