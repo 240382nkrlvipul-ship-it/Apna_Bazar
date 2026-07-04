@@ -224,6 +224,10 @@ class Order(db.Model):
     delivery_agent_id = db.Column(db.Integer, db.ForeignKey('delivery_agents.id', ondelete='SET NULL'), nullable=True, index=True)
     delivery_status = db.Column(db.String(30), nullable=True, default='Pending', index=True) # 'Pending', 'Assigned', 'Out For Delivery', 'Delivered', 'Failed'
 
+    # Coupon fields
+    coupon_code = db.Column(db.String(50), nullable=True)
+    discount_amount = db.Column(db.Numeric(10, 2), default=0.00)
+
     # Relationships
     items = db.relationship('OrderItem', backref='order', cascade="all, delete-orphan", lazy=True)
     payments = db.relationship('Payment', backref='order', cascade="all, delete-orphan", lazy=True)
@@ -247,6 +251,8 @@ class Order(db.Model):
             'longitude': self.longitude,
             'delivery_agent_id': self.delivery_agent_id,
             'delivery_status': self.delivery_status,
+            'coupon_code': self.coupon_code,
+            'discount_amount': float(self.discount_amount) if self.discount_amount is not None else 0.0,
             'items': [item.to_dict() for item in self.items],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
@@ -420,3 +426,32 @@ class OTPStore(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
     verified = db.Column(db.Boolean, default=False)
+
+class Coupon(db.Model):
+    __tablename__ = 'coupons'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    discount_type = db.Column(db.String(20), nullable=False) # 'percentage' or 'flat'
+    discount_value = db.Column(db.Numeric(10, 2), nullable=False)
+    min_cart_amount = db.Column(db.Numeric(10, 2), default=0.00)
+    max_discount_amount = db.Column(db.Numeric(10, 2), nullable=True)
+    description_en = db.Column(db.String(255), nullable=True)
+    description_hi = db.Column(db.String(255), nullable=True)
+    description_mr = db.Column(db.String(255), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'code': self.code,
+            'discount_type': self.discount_type,
+            'discount_value': float(self.discount_value),
+            'min_cart_amount': float(self.min_cart_amount),
+            'max_discount_amount': float(self.max_discount_amount) if self.max_discount_amount is not None else None,
+            'description_en': self.description_en,
+            'description_hi': self.description_hi,
+            'description_mr': self.description_mr,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
