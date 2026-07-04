@@ -7,6 +7,10 @@ def sanitize_string(text):
     if not isinstance(text, str):
         return text
         
+    # Fast path: if there are no HTML tag start characters, it is already safe
+    if '<' not in text:
+        return text
+        
     # Remove script nodes completely
     text = re.sub(r'<script.*?>.*?</script.*?>', '', text, flags=re.IGNORECASE | re.DOTALL)
     # Remove any other HTML opening/closing/standalone tags
