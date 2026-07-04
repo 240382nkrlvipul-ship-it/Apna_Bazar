@@ -96,17 +96,15 @@ class CacheManager:
         entry = self.local_cache.get(key)
         if entry:
             if entry['expires'] > time.time():
-                # Return deep copy of picked object to simulate network boundary
-                return pickle.loads(pickle.dumps(entry['value']))
+                return entry['value']
             else:
                 self.local_cache.pop(key, None)
         return None
 
     def _set_local(self, key, value, timeout):
-        # Store copied value
         expires = time.time() + timeout
         self.local_cache[key] = {
-            'value': pickle.loads(pickle.dumps(value)),
+            'value': value,
             'expires': expires
         }
 
