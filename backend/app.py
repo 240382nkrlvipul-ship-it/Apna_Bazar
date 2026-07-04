@@ -95,6 +95,15 @@ def create_app():
     app.register_blueprint(delivery_bp, url_prefix='/api/delivery')
 
     
+    # Welcome / Index route
+    @app.route('/', methods=['GET'])
+    def index():
+        return jsonify({
+            'message': 'Welcome to the Apna Bazaar API Server',
+            'status': 'online',
+            'health_check_url': '/api/health'
+        }), 200
+
     # Route for serving uploaded images
     @app.route('/static/uploads/<filename>')
     def serve_uploaded_file(filename):
