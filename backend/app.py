@@ -86,6 +86,7 @@ def create_app():
     socketio.init_app(app, cors_allowed_origins=allowed_origins)
     
     # Register Blueprints
+    from backend.routes.coupons import coupons_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(categories_bp, url_prefix='/api/categories')
     app.register_blueprint(products_bp, url_prefix='/api/products')
@@ -93,6 +94,7 @@ def create_app():
     app.register_blueprint(orders_bp, url_prefix='/api')  # Contains both /cart and /orders
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
     app.register_blueprint(delivery_bp, url_prefix='/api/delivery')
+    app.register_blueprint(coupons_bp, url_prefix='/api/coupons')
 
     
     # Welcome / Index route
@@ -122,22 +124,71 @@ def create_app():
     with app.app_context():
         db.create_all()
         
-        # Automatic DB migration check: alter VARCHAR(255) to TEXT for base64 images
+        # Automatic DB migration check: alter VARCHAR(255) to TEXT for base64 images, and add Coupon columns to Orders
         try:
             engine = db.engine
             dialect = engine.dialect.name
-            if dialect in ('postgresql', 'mysql'):
-                from sqlalchemy import text
-                with engine.begin() as conn:
-                    if dialect == 'postgresql':
-                        conn.execute(text("ALTER TABLE categories ALTER COLUMN image_url TYPE TEXT"))
-                        conn.execute(text("ALTER TABLE products ALTER COLUMN image_url TYPE TEXT"))
-                        conn.execute(text("ALTER TABLE product_images ALTER COLUMN image_url TYPE TEXT"))
-                    elif dialect == 'mysql':
-                        conn.execute(text("ALTER TABLE categories MODIFY COLUMN image_url TEXT"))
-                        conn.execute(text("ALTER TABLE products MODIFY COLUMN image_url TEXT"))
-                        conn.execute(text("ALTER TABLE product_images MODIFY COLUMN image_url TEXT"))
-                print("Database columns migrated to TEXT successfully.")
+            from sqlalchemy import text
+            with engine.begin() as conn:
+                if dialect == 'postgresql':
+                    conn.execute(text("ALTER TABLE categories ALTER COLUMN image_url TYPE TEXT"))
+                    conn.execute(text("ALTER TABLE products ALTER COLUMN image_url TYPE TEXT"))
+                    conn.execute(text("ALTER TABLE product_images ALTER COLUMN image_url TYPE TEXT"))
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50)"))
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2) DEFAULT 0.00"))
+                elif dialect == 'mysql':
+                    conn.execute(text("ALTER TABLE categories MODIFY COLUMN image_url TEXT"))
+                    conn.execute(text("ALTER TABLE products MODIFY COLUMN image_url TEXT"))
+                    conn.execute(text("ALTER TABLE product_images MODIFY COLUMN image_url TEXT"))
+                    try:
+                        conn.execute(text("ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(50)"))
+                        conn.execute(text("ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10,2) DEFAULT 0.00"))
+                    except Exception:
+                        pass
+                else: # sqlite
+                    try:
+                        conn.execute(text("ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(50)"))
+                    except Exception:
+                        pass
+                    try:
+                        conn.execute(text("ALTER TABLE orders ADD COLUMN discount_amount NUMERIC(10,2) DEFAULT 0.00"))
+                    except Exception:
+                        pass
+            print("Database columns migrated successfully.")
+        except Exception as me:
+            print(f"Database migration exception: {me}")
+            
+        # Seed coupons if none exist
+        try:
+            from backend.database import Coupon
+            if Coupon.query.count() == 0:
+                c1 = Coupon(
+                    code='FRESH10',
+                    discount_type='percentage',
+                    discount_value=10.00,
+                    min_cart_amount=0.00,
+                    max_discount_amount=100.00,
+                    description_en='10% OFF on all products',
+                    description_hi='सभी उत्पादों पर 10% की छूट',
+                    description_mr='सर्व उत्पादनांवर 10% सूट',
+                    is_active=True
+                )
+                c2 = Coupon(
+                    code='VILLAGE300',
+                    discount_type='flat',
+                    discount_value=30.00,
+                    min_cart_amount=300.00,
+                    description_en='Flat ₹30 OFF on orders above ₹300',
+                    description_hi='₹300 से अधिक के ऑर्डर पर ₹30 की सीधी छूट',
+                    description_mr='₹३०० वरील ऑर्डरवर ₹३० ची थेट सूट',
+                    is_active=True
+                )
+                db.session.add(c1)
+                db.session.add(c2)
+                db.session.commit()
+                print("Default coupons seeded successfully.")
+        except Exception as se:
+            print(f"Coupon seeding exception: {se}")
         except Exception as e:
             print(f"DB columns check/migration warning: {e}")
             
