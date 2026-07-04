@@ -193,14 +193,14 @@ def place_order():
             'out_of_stock': out_of_stock
         }), 400
         
-    total_amount = 0.00
+    subtotal_amount = 0.00
     order_items = []
     
     # Process order items and deduct stock
     for item, product in items_to_process:
         price = float(product.discount_price if product.discount_price else product.price)
         qty = float(item.quantity)
-        total_amount += price * qty
+        subtotal_amount += price * qty
         
         # Deduct stock
         product.stock_quantity = float(product.stock_quantity) - qty
@@ -226,9 +226,25 @@ def place_order():
         )
         order_items.append(o_item)
         
+    # Coupon code validation
+    coupon_code = data.get('coupon_code')
+    discount_amount = 0.00
+    if coupon_code:
+        from backend.database import Coupon
+        coupon = Coupon.query.filter_by(code=coupon_code.strip().upper(), is_active=True).first()
+        if coupon:
+            if subtotal_amount >= float(coupon.min_cart_amount):
+                if coupon.discount_type == 'percentage':
+                    discount_amount = subtotal_amount * (float(coupon.discount_value) / 100.0)
+                    if coupon.max_discount_amount is not None:
+                        discount_amount = min(discount_amount, float(coupon.max_discount_amount))
+                elif coupon.discount_type == 'flat':
+                    discount_amount = float(coupon.discount_value)
+                discount_amount = min(discount_amount, subtotal_amount)
+
     # Add delivery charge from selected village
     delivery_charge = float(village.delivery_charge)
-    total_amount += delivery_charge
+    total_amount = max(0.00, subtotal_amount + delivery_charge - discount_amount)
     
     # Save/update customer address
     existing_loc = CustomerLocation.query.filter_by(customer_id=g.user_id).first()
@@ -255,7 +271,9 @@ def place_order():
         delivery_charge=delivery_charge,
         latitude=lat,
         longitude=lon,
-        delivery_status='Pending'
+        delivery_status='Pending',
+        coupon_code=coupon_code.strip().upper() if coupon_code and discount_amount > 0.00 else None,
+        discount_amount=discount_amount
     )
     db.session.add(order)
     db.session.commit() # Save to get order ID
